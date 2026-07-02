@@ -22,6 +22,7 @@
 #import <AVFoundation/AVDisplayCriteria.h>
 #import <AVKit/AVDisplayManager.h>
 #import <QuartzCore/CADisplayLink.h>
+#import <UIKit/UIScreen.h>
 
 #define DISPLAY_MODE_SWITCH_IN_PROGRESS NSStringFromSelector(@selector(displayModeSwitchInProgress))
 
@@ -87,6 +88,21 @@
     });
     CLog::Log(LOGDEBUG, "displayRateSwitch request: refreshRate = {}, dynamicRange = {}",
               refreshRate, [self stringFromDynamicRange:dynamicRange]);
+  }
+}
+
+- (void)displayDynamicRangeSwitch:(int)dynamicRange
+{
+  if (@available(tvOS 11.2, *))
+  {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      auto avDisplayManager = [g_xbmcController avDisplayManager];
+      auto displayCriteria = [[AVDisplayCriteria alloc] initWithRefreshRate:[self getDisplayRate]
+                                                          videoDynamicRange:dynamicRange];
+      [self setDisplayCriteria:avDisplayManager displayCriteria:displayCriteria];
+    });
+    CLog::Log(LOGDEBUG, "displayDynamicRangeSwitch request: dynamicRange = {}",
+              [self stringFromDynamicRange:dynamicRange]);
   }
 }
 
@@ -199,13 +215,52 @@
   {
     case 0 ... 1:
       return "SDR";
-    case 2 ... 3:
+    case 2:
       return "HDR10";
+    case 3:
+      return "HLG";
     case 4:
       return "DolbyVision";
     default:
       return "Unknown";
   }
+}
+
+- (BOOL)supportsHDR
+{
+  if (@available(tvOS 11.2, *))
+  {
+    auto avDisplayManager = [g_xbmcController avDisplayManager];
+    if (@available(tvOS 11.3, *))
+    {
+      if (avDisplayManager.displayCriteriaMatchingEnabled)
+        return YES;
+    }
+
+    for (UIScreenMode* mode in UIScreen.mainScreen.availableModes)
+    {
+      NSString* modeDescription = mode.description.lowercaseString;
+      if ([modeDescription containsString:@"hdr"])
+        return YES;
+    }
+  }
+
+  return NO;
+}
+
+- (BOOL)supportsDolbyVision
+{
+  if (@available(tvOS 11.2, *))
+  {
+    for (UIScreenMode* mode in UIScreen.mainScreen.availableModes)
+    {
+      NSString* modeDescription = mode.description.lowercaseString;
+      if ([modeDescription containsString:@"dolby"])
+        return YES;
+    }
+  }
+
+  return NO;
 }
 
 - (CGSize)getScreenSize

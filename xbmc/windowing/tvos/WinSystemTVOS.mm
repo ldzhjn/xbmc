@@ -13,6 +13,7 @@
 #include "cores/RetroPlayer/process/ios/RPProcessInfoIOS.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererOpenGLES.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/VTB.h"
 #include "cores/VideoPlayer/Process/ios/ProcessInfoIOS.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVTBGLES.h"
@@ -50,6 +51,14 @@
 using namespace std::chrono_literals;
 
 #define CONST_HDMI "HDMI"
+
+namespace
+{
+constexpr int TVOS_DYNAMIC_RANGE_SDR = 0;
+constexpr int TVOS_DYNAMIC_RANGE_HDR10 = 2;
+constexpr int TVOS_DYNAMIC_RANGE_HLG = 3;
+constexpr int TVOS_DYNAMIC_RANGE_DOLBY_VISION = 4;
+} // namespace
 
 // if there was a devicelost callback
 // but no device reset for 3 secs
@@ -126,7 +135,6 @@ void CWinSystemTVOS::StopLostDeviceTimer()
 {
   m_lostDeviceTimer.Stop();
 }
-
 
 int CWinSystemTVOS::GetDisplayIndexFromSettings()
 {
@@ -234,12 +242,77 @@ bool CWinSystemTVOS::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool b
 
 bool CWinSystemTVOS::SwitchToVideoMode(int width, int height, double refreshrate)
 {
-  /*! @todo Currently support SDR dynamic range only. HDR shouldn't be done during
-   *  a modeswitch. Look to create supplemental method to handle sdr/hdr enable
-   */
-  [g_xbmcController.displayManager displayRateSwitch:refreshrate
-                                    withDynamicRange:0 /*dynamicRange*/];
+  [g_xbmcController.displayManager displayRateSwitch:refreshrate withDynamicRange:m_dynamicRange];
   return true;
+}
+
+int CWinSystemTVOS::GetDynamicRangeForHDR(const VideoPicture* videoPicture) const
+{
+  if (!videoPicture)
+    return TVOS_DYNAMIC_RANGE_SDR;
+
+  const CHDRCapabilities caps = GetDisplayHDRCapabilities();
+
+  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION && caps.SupportsDolbyVision())
+  {
+    return TVOS_DYNAMIC_RANGE_DOLBY_VISION;
+  }
+
+  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HLG && caps.SupportsHLG())
+    return TVOS_DYNAMIC_RANGE_HLG;
+
+  if ((videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||
+       videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS ||
+       videoPicture->color_transfer == AVCOL_TRC_SMPTE2084) &&
+      caps.SupportsHDR10())
+  {
+    return TVOS_DYNAMIC_RANGE_HDR10;
+  }
+
+  return TVOS_DYNAMIC_RANGE_SDR;
+}
+
+bool CWinSystemTVOS::SetHDR(const VideoPicture* videoPicture)
+{
+  int dynamicRange = TVOS_DYNAMIC_RANGE_SDR;
+
+  if (IsHDRDisplaySettingEnabled())
+    dynamicRange = GetDynamicRangeForHDR(videoPicture);
+
+  if (dynamicRange == m_dynamicRange)
+    return m_hdrStatus == HDR_STATUS::HDR_ON;
+
+  m_dynamicRange = dynamicRange;
+  m_hdrStatus = dynamicRange == TVOS_DYNAMIC_RANGE_SDR ? HDR_STATUS::HDR_OFF : HDR_STATUS::HDR_ON;
+
+  CLog::Log(LOGDEBUG, "CWinSystemTVOS::SetHDR: {}",
+            m_hdrStatus == HDR_STATUS::HDR_ON ? "on" : "off");
+
+  [g_xbmcController.displayManager displayDynamicRangeSwitch:m_dynamicRange];
+
+  return m_hdrStatus == HDR_STATUS::HDR_ON;
+}
+
+bool CWinSystemTVOS::IsHDRDisplay()
+{
+  const CHDRCapabilities caps = GetDisplayHDRCapabilities();
+  return caps.SupportsHDR10() || caps.SupportsHLG() || caps.SupportsDolbyVision();
+}
+
+CHDRCapabilities CWinSystemTVOS::GetDisplayHDRCapabilities() const
+{
+  CHDRCapabilities caps;
+
+  if ([g_xbmcController.displayManager supportsHDR])
+  {
+    caps.SetHDR10();
+    caps.SetHLG();
+  }
+
+  if ([g_xbmcController.displayManager supportsDolbyVision])
+    caps.SetDolbyVision();
+
+  return caps;
 }
 
 bool CWinSystemTVOS::GetScreenResolution(int* w, int* h, double* fps, int screenIdx)
@@ -307,7 +380,6 @@ bool CWinSystemTVOS::IsExtSupported(const char* extension) const
 
   return m_eglext.find(name) != std::string::npos;
 }
-
 
 bool CWinSystemTVOS::BeginRender()
 {

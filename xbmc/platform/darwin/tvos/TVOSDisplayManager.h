@@ -27,6 +27,7 @@ class CWinSystemTVOS;
 - (float)getDisplayRate;
 - (void)displayLinkTick:(CADisplayLink*)sender;
 - (void)displayRateSwitch:(float)refreshRate withDynamicRange:(int)dynamicRange;
+- (void)displayDynamicRangeSwitch:(int)dynamicRange;
 - (void)displayRateReset;
 - (void)removeModeSwitchObserver;
 - (void)addModeSwitchObserver;
@@ -35,6 +36,8 @@ class CWinSystemTVOS;
                         change:(NSDictionary*)change
                        context:(void*)context;
 - (const char*)stringFromDynamicRange:(int)dynamicRange;
+- (BOOL)supportsHDR;
+- (BOOL)supportsDolbyVision;
 - (CGSize)getScreenSize;
 - (instancetype)init;
 @end
