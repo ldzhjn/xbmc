@@ -9,5 +9,8 @@
 #import <UIKit/UIKit.h>
 
 @interface XBMCApplicationDelegate : UIResponder <UIApplicationDelegate>
+@end
+
+@interface XBMCSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property(nullable, nonatomic, strong) UIWindow* window;
 @end
