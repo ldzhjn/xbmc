@@ -17,52 +17,16 @@
 
 @implementation XBMCApplicationDelegate
 
-- (XBMCController*)xbmcController
-{
-  return static_cast<XBMCController*>(self.window.rootViewController);
-}
-
-#pragma mark - Shutdown Procedures
-
-- (void)applicationWillResignActive:(UIApplication*)application
-{
-  // Occurs when Kodi is interrupted by something
-  // (e.g. Siri triggered by user, Control center opened by user, Mutlitask opened by user ...)
-}
-
-- (void)applicationDidEnterBackground:(UIApplication*)application
-{
-  // Occurs when Kodi has been backgrounded
-  // (e.g. when user uses remote to go to tvOS homescreen)
-  // applicationWillResignActive() will always be called before this method
-  if (application.applicationState == UIApplicationStateBackground)
-  {
-    // the app is turn into background, not in by screen lock which has app state inactive.
-    [self.xbmcController pauseAnimation];
-    [self.xbmcController enterBackground];
-  }
-}
-
 - (void)applicationWillTerminate:(UIApplication*)application
 {
-  [self.xbmcController stopAnimation];
-}
-
-#pragma mark - Startup Procedures
-
-- (void)applicationDidBecomeActive:(UIApplication*)application
-{
-  // This function occurs:
-  //  * on the first start of Kodi
-  //  * when Kodi has been activated after being suspended by applicationWillResignActive()
-  //  * when Kodi has been foregrounded after applicationDidEnterBackground()
-}
-
-- (void)applicationWillEnterForeground:(UIApplication*)application
-{
-  // Occurs only after an applicationDidEnterBackground()
-  [self.xbmcController resumeAnimation];
-  [self.xbmcController enterForeground];
+  for (UIScene* scene in application.connectedScenes)
+  {
+    if ([scene.delegate isKindOfClass:[XBMCSceneDelegate class]])
+    {
+      UIWindow* window = static_cast<XBMCSceneDelegate*>(scene.delegate).window;
+      [static_cast<XBMCController*>(window.rootViewController) stopAnimation];
+    }
+  }
 }
 
 - (BOOL)application:(UIApplication*)application
@@ -76,12 +40,6 @@
   // as they will directly cause guisetting to get accessed/created
   // via debug log settings.
   CPreflightHandler::MigrateUserdataXMLToNSUserDefaults();
-
-  // UI setup
-  self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
-  self.window.rootViewController = [XBMCController new];
-  [self.window makeKeyAndVisible];
-  [self.xbmcController startAnimation];
 
   // audio session setup
   auto audioSession = AVAudioSession.sharedInstance;
@@ -110,6 +68,63 @@
     CTVOSTopShelf::GetInstance().HandleTopShelfUrl(url.absoluteString.UTF8String, true);
   return YES;
 }
+@end
+
+@implementation XBMCSceneDelegate
+{
+  BOOL _enteredBackground;
+}
+
+- (XBMCController*)xbmcController
+{
+  return static_cast<XBMCController*>(self.window.rootViewController);
+}
+
+- (void)scene:(UIScene*)scene
+    willConnectToSession:(UISceneSession*)session
+               options:(UISceneConnectionOptions*)connectionOptions
+{
+  if (![scene isKindOfClass:[UIWindowScene class]])
+    return;
+
+  self.window = [[UIWindow alloc] initWithWindowScene:static_cast<UIWindowScene*>(scene)];
+  self.window.rootViewController = [XBMCController new];
+  [self.window makeKeyAndVisible];
+  [self.xbmcController startAnimation];
+
+  [self scene:scene openURLContexts:connectionOptions.URLContexts];
+}
+
+- (void)sceneDidEnterBackground:(UIScene*)scene
+{
+  _enteredBackground = YES;
+  [self.xbmcController pauseAnimation];
+  [self.xbmcController enterBackground];
+}
+
+- (void)sceneWillEnterForeground:(UIScene*)scene
+{
+  if (_enteredBackground)
+  {
+    _enteredBackground = NO;
+    [self.xbmcController resumeAnimation];
+    [self.xbmcController enterForeground];
+  }
+}
+
+- (void)scene:(UIScene*)scene openURLContexts:(NSSet<UIOpenURLContext*>*)URLContexts
+{
+  for (UIOpenURLContext* context in URLContexts)
+  {
+    NSArray* urlComponents = [context.URL.absoluteString componentsSeparatedByString:@"/"];
+    if (urlComponents.count < 3)
+      continue;
+    NSString* action = urlComponents[2];
+    if ([action isEqualToString:@"display"] || [action isEqualToString:@"play"])
+      CTVOSTopShelf::GetInstance().HandleTopShelfUrl(context.URL.absoluteString.UTF8String, true);
+  }
+}
+
 @end
 
 static void SigPipeHandler(int s)
