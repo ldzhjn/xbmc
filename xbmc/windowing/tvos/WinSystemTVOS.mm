@@ -297,6 +297,7 @@ bool CWinSystemTVOS::SetHDR(const VideoPicture* videoPicture)
       [g_xbmcController.displayManager displayDynamicRangeReset];
     m_dynamicRange = TVOS_DYNAMIC_RANGE_SDR;
     m_hdrStatus = HDR_STATUS::HDR_OFF;
+    m_requestedRefreshRate = 0.0f;
     return false;
   }
 
