@@ -17,6 +17,7 @@
 #include "cores/VideoPlayer/DVDCodecs/Video/VTB.h"
 #include "cores/VideoPlayer/Process/ios/ProcessInfoIOS.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVTBGLES.h"
+#include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVTBDisplayLayer.h"
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "filesystem/SpecialProtocol.h"
@@ -44,6 +45,7 @@
 #include <vector>
 
 #import <Foundation/Foundation.h>
+#import <CoreMedia/CMFormatDescription.h>
 #import <OpenGLES/ES2/gl.h>
 #import <OpenGLES/ES2/glext.h>
 #import <QuartzCore/CADisplayLink.h>
@@ -57,7 +59,6 @@ namespace
 constexpr int TVOS_DYNAMIC_RANGE_SDR = 0;
 constexpr int TVOS_DYNAMIC_RANGE_HDR10 = 2;
 constexpr int TVOS_DYNAMIC_RANGE_HLG = 3;
-constexpr int TVOS_DYNAMIC_RANGE_DOLBY_VISION = 4;
 } // namespace
 
 // if there was a devicelost callback
@@ -155,6 +156,8 @@ CWinSystemTVOS::CWinSystemTVOS() : CWinSystemBase(), m_lostDeviceTimer(this)
 
 CWinSystemTVOS::~CWinSystemTVOS()
 {
+  if (m_hdrFormatDescription)
+    CFRelease(m_hdrFormatDescription);
   m_pDisplayLink->callbackClass = nil;
   delete m_pDisplayLink;
 }
@@ -201,6 +204,7 @@ bool CWinSystemTVOS::CreateNewWindow(const std::string& name, bool fullScreen, R
   VTB::CDecoder::Register();
   VIDEOPLAYER::CRendererFactory::ClearRenderer();
   CLinuxRendererGLES::Register();
+  CRendererVTBDisplayLayer::Register();
   CRendererVTB::Register();
   VIDEOPLAYER::CProcessInfoIOS::Register();
   RETRO::CRPProcessInfoIOS::Register();
@@ -242,7 +246,17 @@ bool CWinSystemTVOS::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool b
 
 bool CWinSystemTVOS::SwitchToVideoMode(int width, int height, double refreshrate)
 {
-  [g_xbmcController.displayManager displayRateSwitch:refreshrate withDynamicRange:m_dynamicRange];
+  m_requestedRefreshRate = static_cast<float>(refreshrate);
+  if (m_hdrStatus == HDR_STATUS::HDR_ON && m_hdrFormatDescription)
+  {
+    if ([g_xbmcController.displayManager displayVideoFormatSwitch:m_hdrFormatDescription
+                                                       refreshRate:m_requestedRefreshRate])
+      return true;
+    SetHDR(nullptr);
+  }
+
+  [g_xbmcController.displayManager displayRateSwitch:refreshrate
+                                    withDynamicRange:TVOS_DYNAMIC_RANGE_SDR];
   return true;
 }
 
@@ -253,18 +267,10 @@ int CWinSystemTVOS::GetDynamicRangeForHDR(const VideoPicture* videoPicture) cons
 
   const CHDRCapabilities caps = GetDisplayHDRCapabilities();
 
-  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION && caps.SupportsDolbyVision())
-  {
-    return TVOS_DYNAMIC_RANGE_DOLBY_VISION;
-  }
-
   if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HLG && caps.SupportsHLG())
     return TVOS_DYNAMIC_RANGE_HLG;
 
-  if ((videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||
-       videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS ||
-       videoPicture->color_transfer == AVCOL_TRC_SMPTE2084) &&
-      caps.SupportsHDR10())
+  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 && caps.SupportsHDR10())
   {
     return TVOS_DYNAMIC_RANGE_HDR10;
   }
@@ -274,29 +280,70 @@ int CWinSystemTVOS::GetDynamicRangeForHDR(const VideoPicture* videoPicture) cons
 
 bool CWinSystemTVOS::SetHDR(const VideoPicture* videoPicture)
 {
-  int dynamicRange = TVOS_DYNAMIC_RANGE_SDR;
+  const int dynamicRange = CanUseHDRVideoLayer() ? GetDynamicRangeForHDR(videoPicture)
+                                                  : TVOS_DYNAMIC_RANGE_SDR;
+  auto* buffer = videoPicture ? dynamic_cast<VTB::CVideoBufferVTB*>(videoPicture->videoBuffer)
+                              : nullptr;
+  CVPixelBufferRef pixelBuffer = buffer ? buffer->GetPB() : nullptr;
+  if (dynamicRange == TVOS_DYNAMIC_RANGE_SDR || !pixelBuffer ||
+      CVPixelBufferGetPixelFormatType(pixelBuffer) != kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
+  {
+    if (m_hdrFormatDescription)
+    {
+      CFRelease(m_hdrFormatDescription);
+      m_hdrFormatDescription = nullptr;
+    }
+    if (m_hdrStatus == HDR_STATUS::HDR_ON)
+      [g_xbmcController.displayManager displayDynamicRangeReset];
+    m_dynamicRange = TVOS_DYNAMIC_RANGE_SDR;
+    m_hdrStatus = HDR_STATUS::HDR_OFF;
+    return false;
+  }
 
-  if (IsHDRDisplaySettingEnabled())
-    dynamicRange = GetDynamicRangeForHDR(videoPicture);
+  CMVideoFormatDescriptionRef formatDescription = nullptr;
+  if (CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixelBuffer,
+                                                  &formatDescription) != noErr)
+  {
+    SetHDR(nullptr);
+    return false;
+  }
 
-  if (dynamicRange == m_dynamicRange)
-    return m_hdrStatus == HDR_STATUS::HDR_ON;
+  const float rate = m_requestedRefreshRate > 0.0f ? m_requestedRefreshRate
+                                                    : [g_xbmcController.displayManager getDisplayRate];
+  const bool accepted = [g_xbmcController.displayManager displayVideoFormatSwitch:formatDescription
+                                                                      refreshRate:rate];
+  if (accepted)
+  {
+    if (m_hdrFormatDescription)
+      CFRelease(m_hdrFormatDescription);
+    m_hdrFormatDescription = formatDescription;
+    m_dynamicRange = dynamicRange;
+    m_hdrStatus = HDR_STATUS::HDR_ON;
+    CLog::Log(LOGDEBUG, "CWinSystemTVOS::SetHDR: requesting {}",
+              dynamicRange == TVOS_DYNAMIC_RANGE_HLG ? "HLG" : "HDR10");
+  }
+  else
+  {
+    CFRelease(formatDescription);
+    SetHDR(nullptr);
+  }
+  return accepted;
+}
 
-  m_dynamicRange = dynamicRange;
-  m_hdrStatus = dynamicRange == TVOS_DYNAMIC_RANGE_SDR ? HDR_STATUS::HDR_OFF : HDR_STATUS::HDR_ON;
-
-  CLog::Log(LOGDEBUG, "CWinSystemTVOS::SetHDR: {}",
-            m_hdrStatus == HDR_STATUS::HDR_ON ? "on" : "off");
-
-  [g_xbmcController.displayManager displayDynamicRangeSwitch:m_dynamicRange];
-
-  return m_hdrStatus == HDR_STATUS::HDR_ON;
+bool CWinSystemTVOS::CanUseHDRVideoLayer()
+{
+#if __TV_OS_VERSION_MAX_ALLOWED >= 170000
+  if (@available(tvOS 17.0, *))
+    return IsHDRDisplaySettingEnabled() &&
+           [g_xbmcController.displayManager canMatchVideoDynamicRange];
+#endif
+  return false;
 }
 
 bool CWinSystemTVOS::IsHDRDisplay()
 {
   const CHDRCapabilities caps = GetDisplayHDRCapabilities();
-  return caps.SupportsHDR10() || caps.SupportsHLG() || caps.SupportsDolbyVision();
+  return caps.SupportsHDR10() || caps.SupportsHLG();
 }
 
 CHDRCapabilities CWinSystemTVOS::GetDisplayHDRCapabilities() const
@@ -304,13 +351,10 @@ CHDRCapabilities CWinSystemTVOS::GetDisplayHDRCapabilities() const
   CHDRCapabilities caps;
 
   if ([g_xbmcController.displayManager supportsHDR])
-  {
     caps.SetHDR10();
-    caps.SetHLG();
-  }
 
-  if ([g_xbmcController.displayManager supportsDolbyVision])
-    caps.SetDolbyVision();
+  if ([g_xbmcController.displayManager supportsHLG])
+    caps.SetHLG();
 
   return caps;
 }

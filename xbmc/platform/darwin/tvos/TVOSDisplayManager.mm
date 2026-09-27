@@ -20,9 +20,9 @@
 #import "platform/darwin/tvos/XBMCController.h"
 
 #import <AVFoundation/AVDisplayCriteria.h>
+#import <AVFoundation/AVPlayer.h>
 #import <AVKit/AVDisplayManager.h>
 #import <QuartzCore/CADisplayLink.h>
-#import <UIKit/UIScreen.h>
 
 #define DISPLAY_MODE_SWITCH_IN_PROGRESS NSStringFromSelector(@selector(displayModeSwitchInProgress))
 
@@ -91,18 +91,39 @@
   }
 }
 
-- (void)displayDynamicRangeSwitch:(int)dynamicRange
+- (BOOL)displayVideoFormatSwitch:(CMFormatDescriptionRef)formatDescription
+                      refreshRate:(float)refreshRate
+{
+#if __TV_OS_VERSION_MAX_ALLOWED >= 170000
+  if (@available(tvOS 17.0, *))
+  {
+    if (formatDescription == nullptr || ![self canMatchVideoDynamicRange])
+      return NO;
+
+    AVDisplayCriteria* criteria =
+        [[AVDisplayCriteria alloc] initWithRefreshRate:refreshRate
+                                    formatDescription:formatDescription];
+    if (criteria == nil)
+      return NO;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+      auto manager = [g_xbmcController avDisplayManager];
+      [self setDisplayCriteria:manager displayCriteria:criteria];
+    });
+    return YES;
+  }
+#endif
+  return NO;
+}
+
+- (void)displayDynamicRangeReset
 {
   if (@available(tvOS 11.2, *))
   {
     dispatch_async(dispatch_get_main_queue(), ^{
-      auto avDisplayManager = [g_xbmcController avDisplayManager];
-      auto displayCriteria = [[AVDisplayCriteria alloc] initWithRefreshRate:[self getDisplayRate]
-                                                          videoDynamicRange:dynamicRange];
-      [self setDisplayCriteria:avDisplayManager displayCriteria:displayCriteria];
+      auto manager = [g_xbmcController avDisplayManager];
+      [self setDisplayCriteria:manager displayCriteria:nil];
     });
-    CLog::Log(LOGDEBUG, "displayDynamicRangeSwitch request: dynamicRange = {}",
-              [self stringFromDynamicRange:dynamicRange]);
   }
 }
 
@@ -229,37 +250,21 @@
 - (BOOL)supportsHDR
 {
   if (@available(tvOS 11.2, *))
-  {
-    auto avDisplayManager = [g_xbmcController avDisplayManager];
-    if (@available(tvOS 11.3, *))
-    {
-      if (avDisplayManager.displayCriteriaMatchingEnabled)
-        return YES;
-    }
-
-    for (UIScreenMode* mode in UIScreen.mainScreen.availableModes)
-    {
-      NSString* modeDescription = mode.description.lowercaseString;
-      if ([modeDescription containsString:@"hdr"])
-        return YES;
-    }
-  }
-
+    return (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0;
   return NO;
 }
 
-- (BOOL)supportsDolbyVision
+- (BOOL)supportsHLG
 {
   if (@available(tvOS 11.2, *))
-  {
-    for (UIScreenMode* mode in UIScreen.mainScreen.availableModes)
-    {
-      NSString* modeDescription = mode.description.lowercaseString;
-      if ([modeDescription containsString:@"dolby"])
-        return YES;
-    }
-  }
+    return (AVPlayer.availableHDRModes & AVPlayerHDRModeHLG) != 0;
+  return NO;
+}
 
+- (BOOL)canMatchVideoDynamicRange
+{
+  if (@available(tvOS 17.0, *))
+    return [g_xbmcController avDisplayManager].displayCriteriaMatchingEnabled;
   return NO;
 }
 

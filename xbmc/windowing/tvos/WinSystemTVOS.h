@@ -15,6 +15,8 @@
 #include "windowing/OSScreenSaver.h"
 #include "windowing/WinSystem.h"
 
+#include <CoreMedia/CMFormatDescription.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +61,7 @@ public:
   bool IsHDRDisplay() override;
   HDR_STATUS GetOSHDRStatus() override { return m_hdrStatus; }
   CHDRCapabilities GetDisplayHDRCapabilities() const override;
+  bool CanUseHDRVideoLayer();
 
   void ShowOSMouse(bool show) override {}
   bool HasCursor() override;
@@ -113,4 +116,6 @@ private:
   CADisplayLinkWrapper* m_pDisplayLink;
   int m_dynamicRange = 0;
   HDR_STATUS m_hdrStatus = HDR_STATUS::HDR_OFF;
+  CMFormatDescriptionRef m_hdrFormatDescription = nullptr;
+  float m_requestedRefreshRate = 0.0f;
 };

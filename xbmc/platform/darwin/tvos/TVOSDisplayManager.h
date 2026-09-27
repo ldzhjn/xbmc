@@ -9,6 +9,7 @@
 #import <CoreGraphics/CGBase.h>
 #import <CoreGraphics/CGGeometry.h>
 #import <Foundation/Foundation.h>
+#import <CoreMedia/CMFormatDescription.h>
 
 @class CADisplayLink;
 
@@ -27,7 +28,9 @@ class CWinSystemTVOS;
 - (float)getDisplayRate;
 - (void)displayLinkTick:(CADisplayLink*)sender;
 - (void)displayRateSwitch:(float)refreshRate withDynamicRange:(int)dynamicRange;
-- (void)displayDynamicRangeSwitch:(int)dynamicRange;
+- (BOOL)displayVideoFormatSwitch:(CMFormatDescriptionRef)formatDescription
+                      refreshRate:(float)refreshRate;
+- (void)displayDynamicRangeReset;
 - (void)displayRateReset;
 - (void)removeModeSwitchObserver;
 - (void)addModeSwitchObserver;
@@ -37,7 +40,8 @@ class CWinSystemTVOS;
                        context:(void*)context;
 - (const char*)stringFromDynamicRange:(int)dynamicRange;
 - (BOOL)supportsHDR;
-- (BOOL)supportsDolbyVision;
+- (BOOL)supportsHLG;
+- (BOOL)canMatchVideoDynamicRange;
 - (CGSize)getScreenSize;
 - (instancetype)init;
 @end
