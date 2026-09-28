@@ -45,7 +45,9 @@ protected:
 class CDecoder: public IHardwareDecoder
 {
 public:
-  CDecoder(CProcessInfo& processInfo, bool hdrOutput = false);
+  CDecoder(CProcessInfo& processInfo,
+           bool hdrOutput = false,
+           bool allowColorTransferFallback = false);
   ~CDecoder() override;
   static IHardwareDecoder* Create(CDVDStreamInfo &hint, CProcessInfo &processInfo, AVPixelFormat fmt);
   static bool Register();
@@ -63,6 +65,8 @@ protected:
   AVCodecContext *m_avctx;
   CProcessInfo& m_processInfo;
   bool m_hdrOutput = false;
+  bool m_allowColorTransferFallback = false;
+  bool m_loggedFirstPicture = false;
   CVideoBufferVTB *m_renderBuffer = nullptr;
   std::shared_ptr<CVideoBufferPoolVTB> m_videoBufferPool;
 };
