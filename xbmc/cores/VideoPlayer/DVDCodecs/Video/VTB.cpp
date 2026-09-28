@@ -15,6 +15,7 @@
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/log.h"
 #if defined(TARGET_DARWIN_TVOS)
 #include "windowing/tvos/WinSystemTVOS.h"
 #endif
@@ -144,11 +145,21 @@ IHardwareDecoder* CDecoder::Create(CDVDStreamInfo &hint, CProcessInfo &processIn
     bool hdrOutput = false;
 #if defined(TARGET_DARWIN_TVOS)
     auto* winSystem = dynamic_cast<CWinSystemTVOS*>(CServiceBroker::GetWinSystem());
-    if (winSystem && winSystem->CanUseHDRVideoLayer() && hint.bitdepth >= 10)
+    if (winSystem)
     {
+      const bool canUseHDRVideoLayer = winSystem->CanUseHDRVideoLayer();
       const CHDRCapabilities caps = winSystem->GetDisplayHDRCapabilities();
-      hdrOutput = (hint.hdrType == StreamHdrType::HDR_TYPE_HDR10 && caps.SupportsHDR10()) ||
-                  (hint.hdrType == StreamHdrType::HDR_TYPE_HLG && caps.SupportsHLG());
+      // InputStream addons can report the HDR transfer without filling in
+      // CDVDStreamInfo::bitdepth. The decoder negotiates the actual P010 format.
+      hdrOutput = canUseHDRVideoLayer &&
+                  ((hint.hdrType == StreamHdrType::HDR_TYPE_HDR10 && caps.SupportsHDR10()) ||
+                   (hint.hdrType == StreamHdrType::HDR_TYPE_HLG && caps.SupportsHLG()));
+      CLog::Log(LOGDEBUG,
+                "VTB::Create: HDR video layer {}, type {}, bitdepth {}, transfer {}, HDR10 {}, "
+                "HLG {}, display matching {}",
+                hdrOutput ? "selected" : "skipped", static_cast<int>(hint.hdrType),
+                hint.bitdepth, static_cast<int>(hint.colorTransferCharacteristic),
+                caps.SupportsHDR10(), caps.SupportsHLG(), canUseHDRVideoLayer);
     }
 #endif
     return new VTB::CDecoder(processInfo, hdrOutput);

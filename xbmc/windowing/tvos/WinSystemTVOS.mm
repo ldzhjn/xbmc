@@ -335,8 +335,13 @@ bool CWinSystemTVOS::CanUseHDRVideoLayer()
 {
 #if __TV_OS_VERSION_MAX_ALLOWED >= 170000
   if (@available(tvOS 17.0, *))
-    return IsHDRDisplaySettingEnabled() &&
-           [g_xbmcController.displayManager canMatchVideoDynamicRange];
+  {
+    const bool hdrEnabled = IsHDRDisplaySettingEnabled();
+    const bool matchingEnabled = [g_xbmcController.displayManager canMatchVideoDynamicRange];
+    CLog::Log(LOGDEBUG, "CWinSystemTVOS::CanUseHDRVideoLayer: HDR setting {}, display matching {}",
+              hdrEnabled, matchingEnabled);
+    return hdrEnabled && matchingEnabled;
+  }
 #endif
   return false;
 }

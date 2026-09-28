@@ -11,6 +11,7 @@
 #include "../RenderFactory.h"
 #include "ServiceBroker.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/VTB.h"
+#include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/tvos/WinSystemTVOS.h"
 
@@ -142,7 +143,9 @@ bool CRendererVTBDisplayLayer::Configure(const VideoPicture& picture,
   ManageRenderArea();
 
   SetColorAttachments(vtb->GetPB(), picture);
-  CServiceBroker::GetWinSystem()->SetHDR(&picture);
+  const bool hdrRequested = CServiceBroker::GetWinSystem()->SetHDR(&picture);
+  CLog::Log(LOGINFO, "CRendererVTBDisplayLayer::Configure: P010 video layer, HDR request {}",
+            hdrRequested ? "accepted" : "rejected");
   m_configured = true;
   return true;
 }
