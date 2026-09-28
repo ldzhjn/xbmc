@@ -21,6 +21,7 @@
 
 #include "platform/darwin/DarwinUtils.h"
 
+#include <algorithm>
 #include <mutex>
 #include <sstream>
 
@@ -363,15 +364,16 @@ unsigned int CAAudioUnitSink::write(uint8_t* data, unsigned int frames, unsigned
   if (m_buffer->GetWriteSize() < frames * framesize)
   { // no space to write - wait for a bit
     std::unique_lock lock(mutex);
-    auto timeout = std::chrono::milliseconds(900 * frames / m_sampleRate);
+    auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::duration<double>(
+            std::max(2.0 * static_cast<double>(m_bufferDuration),
+                     static_cast<double>(frames) / m_sampleRate)));
     if (!m_started)
       timeout = 4500ms;
 
-    // we are using a timer here for being sure for timeouts
-    // condvar can be woken spuriously as signaled
-    XbmcThreads::EndTime<> timer(timeout);
-    condVar.wait(mutex, timeout);
-    if (!m_started && timer.IsTimePast())
+    if (!condVar.wait(lock, timeout,
+                      [&] { return m_buffer->GetWriteSize() >= frames * framesize; }) &&
+        !m_started)
     {
       CLog::Log(LOGERROR, "{} engine didn't start in {} ms!", __FUNCTION__, timeout.count());
       return INT_MAX;
@@ -390,7 +392,8 @@ void CAAudioUnitSink::drain()
   unsigned int bytes = m_buffer->GetReadSize();
   unsigned int totalBytes = bytes;
   int maxNumTimeouts = 3;
-  auto timeout = std::chrono::milliseconds(static_cast<int>(buffertime()));
+  auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::duration<double>(buffertime()));
 
   while (bytes && maxNumTimeouts > 0)
   {
@@ -810,7 +813,9 @@ bool CAESinkDARWINTVOS::Initialize(AEAudioFormat& format, std::string& device)
       break;
     default:
       format.m_frames = 1024;
-      buffer_size = (512 * audioFormat.mBytesPerFrame) * 8;
+      // Keep enough decoded PCM for bursts from live compressed audio streams.
+      buffer_size = (static_cast<size_t>(audioFormat.mSampleRate) / 2) *
+                    audioFormat.mBytesPerFrame;
       break;
   }
   m_audioSink = new CAAudioUnitSink;
