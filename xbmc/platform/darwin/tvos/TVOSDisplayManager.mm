@@ -106,6 +106,9 @@
     if (criteria == nil)
       return NO;
 
+    CLog::Log(LOGDEBUG, "TVOSDisplayManager: video format criteria dynamic range {}",
+              [self stringFromDynamicRange:criteria.videoDynamicRange]);
+
     dispatch_async(dispatch_get_main_queue(), ^{
       auto manager = [g_xbmcController avDisplayManager];
       [self setDisplayCriteria:manager displayCriteria:criteria];

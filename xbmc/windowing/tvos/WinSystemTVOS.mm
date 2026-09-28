@@ -267,7 +267,10 @@ int CWinSystemTVOS::GetDynamicRangeForHDR(const VideoPicture* videoPicture) cons
 
   const CHDRCapabilities caps = GetDisplayHDRCapabilities();
 
-  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HLG && caps.SupportsHLG())
+  // A display may accept HLG sample buffers even when AVPlayer's deprecated
+  // HLG mode bit is clear. Let AVDisplayCriteria select the actual HDMI mode.
+  if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HLG &&
+      (caps.SupportsHLG() || caps.SupportsHDR10()))
     return TVOS_DYNAMIC_RANGE_HLG;
 
   if (videoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 && caps.SupportsHDR10())

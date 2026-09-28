@@ -161,7 +161,7 @@ IHardwareDecoder* CDecoder::Create(CDVDStreamInfo &hint, CProcessInfo &processIn
                   (((hint.hdrType == StreamHdrType::HDR_TYPE_HDR10 || hdr10BaseLayer) &&
                     caps.SupportsHDR10()) ||
                    ((hint.hdrType == StreamHdrType::HDR_TYPE_HLG || hlgBaseLayer) &&
-                    caps.SupportsHLG()));
+                    (caps.SupportsHLG() || caps.SupportsHDR10())));
       CLog::Log(LOGDEBUG,
                 "VTB::Create: HDR video layer {}, type {}, bitdepth {}, transfer {}, HDR10 {}, "
                 "HLG {}, display matching {}, DV profile {}, base compatibility {}",
@@ -224,7 +224,8 @@ bool CDecoder::Open(AVCodecContext *avctx, AVCodecContext* mainctx, enum AVPixel
     {
       const CHDRCapabilities caps = winSystem->GetDisplayHDRCapabilities();
       m_hdrOutput = (avctx->color_trc == AVCOL_TRC_SMPTE2084 && caps.SupportsHDR10()) ||
-                    (avctx->color_trc == AVCOL_TRC_ARIB_STD_B67 && caps.SupportsHLG());
+                    (avctx->color_trc == AVCOL_TRC_ARIB_STD_B67 &&
+                     (caps.SupportsHLG() || caps.SupportsHDR10()));
     }
   }
   CLog::Log(LOGDEBUG, "VTB::Open: HDR video layer {}",
