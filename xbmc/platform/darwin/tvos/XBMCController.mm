@@ -52,6 +52,30 @@
 
 XBMCController* g_xbmcController;
 
+#if __TV_OS_VERSION_MAX_ALLOWED >= 170000
+namespace
+{
+// AVSampleBufferVideoRenderer accepts samples off the main thread. Keep its
+// work bounded so 4K60 HDR presentation cannot delay Kodi's UI and player.
+dispatch_queue_t VideoSampleQueue()
+{
+  static dispatch_queue_t queue =
+      dispatch_queue_create("org.xbmc.tvos.video-samples", DISPATCH_QUEUE_SERIAL);
+  return queue;
+}
+
+dispatch_semaphore_t VideoSamplePermit()
+{
+  static dispatch_semaphore_t permit = dispatch_semaphore_create(1);
+  return permit;
+}
+} // namespace
+
+@interface XBMCController ()
+@property(atomic, strong) AVSampleBufferVideoRenderer* videoSampleRenderer API_AVAILABLE(tvos(17.0));
+@end
+#endif
+
 #pragma mark - XBMCController implementation
 @implementation XBMCController
 
@@ -180,6 +204,7 @@ XBMCController* g_xbmcController;
         self.videoLayer.frame = self.view.bounds;
         [self.view.layer insertSublayer:self.videoLayer below:self.glView.layer];
       }
+      self.videoSampleRenderer = self.videoLayer.sampleBufferRenderer;
       self.glView.opaque = NO;
       self.glView.layer.opaque = NO;
       enabled = self.videoLayer != nil;
@@ -197,11 +222,15 @@ XBMCController* g_xbmcController;
 - (void)disableVideoLayer
 {
   void (^disable)(void) = ^{
+    self.videoLayerGeneration = self.videoLayerGeneration + 1;
 #if __TV_OS_VERSION_MAX_ALLOWED >= 170000
     if (@available(tvOS 17.0, *))
-      [self.videoLayer.sampleBufferRenderer flush];
+    {
+      AVSampleBufferVideoRenderer* renderer = self.videoSampleRenderer;
+      self.videoSampleRenderer = nil;
+      dispatch_async(VideoSampleQueue(), ^{ [renderer flush]; });
+    }
 #endif
-    self.videoLayerGeneration = self.videoLayerGeneration + 1;
     [self.videoLayer removeFromSuperlayer];
     self.videoLayer = nil;
     self.glView.layer.opaque = YES;
@@ -228,12 +257,12 @@ XBMCController* g_xbmcController;
   if (@available(tvOS 17.0, *))
   {
     const NSUInteger generation = self.videoLayerGeneration;
+    AVSampleBufferVideoRenderer* renderer = self.videoSampleRenderer;
+    if (renderer == nil || dispatch_semaphore_wait(VideoSamplePermit(), DISPATCH_TIME_NOW) != 0)
+      return;
     CFRetain(sampleBuffer);
-    dispatch_async(dispatch_get_main_queue(), ^{
-      AVSampleBufferVideoRenderer* renderer = self.videoLayerGeneration == generation
-                                                  ? self.videoLayer.sampleBufferRenderer
-                                                  : nil;
-      if (renderer != nil)
+    dispatch_async(VideoSampleQueue(), ^{
+      if (self.videoLayerGeneration == generation)
       {
         if (renderer.status == AVQueuedSampleBufferRenderingStatusFailed)
           [renderer flush];
@@ -241,6 +270,7 @@ XBMCController* g_xbmcController;
           [renderer enqueueSampleBuffer:sampleBuffer];
       }
       CFRelease(sampleBuffer);
+      dispatch_semaphore_signal(VideoSamplePermit());
     });
   }
 #endif
@@ -254,9 +284,10 @@ XBMCController* g_xbmcController;
     // Frames submitted before a seek must not arrive after the flush.
     const NSUInteger generation = self.videoLayerGeneration + 1;
     self.videoLayerGeneration = generation;
-    dispatch_async(dispatch_get_main_queue(), ^{
+    AVSampleBufferVideoRenderer* renderer = self.videoSampleRenderer;
+    dispatch_async(VideoSampleQueue(), ^{
       if (self.videoLayerGeneration == generation)
-        [self.videoLayer.sampleBufferRenderer flush];
+        [renderer flush];
     });
   }
 #endif
