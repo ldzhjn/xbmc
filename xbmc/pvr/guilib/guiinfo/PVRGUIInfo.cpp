@@ -1168,6 +1168,9 @@ bool CPVRGUIInfo::GetPVRLabel(const CFileItem* item,
     case PVR_TIMESHIFT_PROGRESS_END_TIME:
       strValue = m_timesInfo.GetTimeshiftProgressEndTime(static_cast<TIME_FORMAT>(info.GetData1()));
       return true;
+    case PVR_TIMESHIFT_CACHED_RANGES:
+      strValue = m_timesInfo.GetTimeshiftCachedRanges();
+      return true;
     case PVR_EPG_EVENT_SEEK_TIME:
     {
       const auto& components = CServiceBroker::GetAppComponents();

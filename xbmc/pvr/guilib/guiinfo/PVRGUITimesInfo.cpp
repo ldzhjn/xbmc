@@ -21,6 +21,7 @@
 #include "utils/MathUtils.h"
 #include "utils/StringUtils.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -393,6 +394,31 @@ int CPVRGUITimesInfo::GetTimeshiftProgressPlayPosition() const
     return MathUtils::round_int(duration.count() / m_iTimeshiftProgressDuration * 100.0);
   }
   return 0;
+}
+
+std::string CPVRGUITimesInfo::GetTimeshiftCachedRanges() const
+{
+  const auto ranges = CServiceBroker::GetDataCacheCore().GetCachedRanges();
+  std::unique_lock lock(m_critSection);
+  if (!m_iStartTime || !m_iTimeshiftProgressDuration || ranges.empty())
+    return {};
+
+  std::string values;
+  const double duration = static_cast<double>(m_iTimeshiftProgressDuration);
+  for (const auto& [begin, end] : ranges)
+  {
+    const double first = (m_iStartTime - m_iTimeshiftProgressStartTime + begin / 1000.0) *
+                         100.0 / duration;
+    const double last = (m_iStartTime - m_iTimeshiftProgressStartTime + end / 1000.0) *
+                        100.0 / duration;
+    if (last <= 0 || first >= 100)
+      continue;
+    if (!values.empty())
+      values.push_back(',');
+    values += StringUtils::Format("{:.5f},{:.5f}", std::max(0.0, first),
+                                  std::min(100.0, last));
+  }
+  return values;
 }
 
 int CPVRGUITimesInfo::GetTimeshiftProgressEpgStart() const

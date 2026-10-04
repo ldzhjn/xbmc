@@ -635,6 +635,14 @@ extern "C"
     double ptsStart;
     double ptsBegin;
     double ptsEnd;
+    // Optional complete, locally cached media ranges in milliseconds from the
+    // stream's playback origin. Kept at the end for older inputstream add-ons.
+    unsigned int cachedRangeCount;
+    struct
+    {
+      int64_t begin;
+      int64_t end;
+    } cachedRanges[32];
   };
 
   /*!

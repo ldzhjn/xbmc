@@ -745,6 +745,7 @@ constexpr uint32_t PVR_BACKEND_PROVIDERS             = PVR_STRINGS_START + 74;
 constexpr uint32_t PVR_BACKEND_CHANNEL_GROUPS        = PVR_STRINGS_START + 75;
 constexpr uint32_t PVR_CLIENT_NAME                   = PVR_STRINGS_START + 76;
 constexpr uint32_t PVR_INSTANCE_NAME                 = PVR_STRINGS_START + 77;
+constexpr uint32_t PVR_TIMESHIFT_CACHED_RANGES       = PVR_STRINGS_START + 78;
 
 constexpr uint32_t PVR_INTS_START                    = 1300;
 constexpr uint32_t PVR_CLIENT_COUNT                  = PVR_INTS_START;

@@ -9186,7 +9186,7 @@ constexpr std::array<InfoMap, 7> playlist = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 82> pvr = {{
+constexpr std::array<InfoMap, 83> pvr = {{
     {"isrecording",                   PVR_IS_RECORDING},
     {"hastimer",                      PVR_HAS_TIMER},
     {"hastvchannels",                 PVR_HAS_TV_CHANNELS},
@@ -9265,6 +9265,7 @@ constexpr std::array<InfoMap, 82> pvr = {{
     {"timeshiftprogressepgend",       PVR_TIMESHIFT_PROGRESS_EPG_END},
     {"timeshiftprogressbufferstart",  PVR_TIMESHIFT_PROGRESS_BUFFER_START},
     {"timeshiftprogressbufferend",    PVR_TIMESHIFT_PROGRESS_BUFFER_END},
+    {"timeshiftcachedranges",          PVR_TIMESHIFT_CACHED_RANGES},
     {"epgeventicon",                  PVR_EPG_EVENT_ICON},
     {"clientcount",                   PVR_CLIENT_COUNT},
     {"clientname",                    PVR_CLIENT_NAME},

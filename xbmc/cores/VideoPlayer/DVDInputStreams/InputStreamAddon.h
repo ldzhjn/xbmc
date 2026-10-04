@@ -70,6 +70,7 @@ public:
   // ITime
   CDVDInputStream::ITimes* GetITimes() override;
   bool GetTimes(Times &times) override;
+  std::vector<std::pair<int64_t, int64_t>> GetCachedRanges() override;
 
   // IPosTime
   CDVDInputStream::IPosTime* GetIPosTime() override;

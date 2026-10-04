@@ -67,6 +67,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <ctime>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -929,6 +930,7 @@ bool CVideoPlayer::OpenInputStream()
   CLog::Log(LOGINFO, "Creating InputStream");
 
   m_pInputStream = CDVDFactoryInputStream::CreateInputStream(this, m_item, true);
+  m_liveDisplayTimeOrigin = 0;
   if (m_pInputStream == nullptr)
   {
     CLog::Log(LOGERROR, "CVideoPlayer::OpenInputStream - unable to create input stream for [{}]",
@@ -5782,6 +5784,16 @@ void CVideoPlayer::UpdatePlayState(double timeout)
       }
       state.time += state.time_offset * 1000 / DVD_TIME_BASE;
       state.timeMax = pDisplayTime->GetTotalTime();
+      // Live inputstreams that expose only display time still have a real
+      // timeshift window. Give PVR's progress bar a stable wall-clock origin
+      // so its cursor follows the current position instead of staying at 0.
+      if (m_pInputStream->IsRealtime())
+      {
+        if (!m_liveDisplayTimeOrigin)
+          m_liveDisplayTimeOrigin =
+              std::time(nullptr) - static_cast<std::time_t>(std::max(0.0, state.time) / 1000);
+        state.startTime = m_liveDisplayTimeOrigin;
+      }
     }
     else
     {
@@ -5901,6 +5913,9 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   }
 
   m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax);
+  CServiceBroker::GetDataCacheCore().SetCachedRanges(
+      m_pInputStream ? m_pInputStream->GetCachedRanges()
+                     : std::vector<std::pair<int64_t, int64_t>>{});
 
   std::unique_lock lock(m_StateSection);
   m_State = state;
