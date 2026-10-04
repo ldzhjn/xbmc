@@ -27,6 +27,12 @@ extern "C"
 }
 
 class CVideoBufferPoolFFmpeg;
+#if defined(TARGET_DARWIN_TVOS)
+namespace VTB
+{
+class CSoftwareHDR;
+}
+#endif
 
 class CDVDVideoCodecFFmpeg : public CDVDVideoCodec, public ICallbackHWAccel
 {
@@ -65,6 +71,9 @@ protected:
   AVFrame* m_pDecodedFrame = nullptr;;
   AVCodecContext* m_pCodecContext = nullptr;;
   std::shared_ptr<CVideoBufferPoolFFmpeg> m_videoBufferPool;
+#if defined(TARGET_DARWIN_TVOS)
+  std::unique_ptr<VTB::CSoftwareHDR> m_softwareHDR;
+#endif
 
   std::string m_filters;
   std::string m_filters_next;

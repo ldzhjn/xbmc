@@ -26,6 +26,9 @@
 #include "utils/StringUtils.h"
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
+#if defined(TARGET_DARWIN_TVOS)
+#include "VTB.h"
+#endif
 
 #include <memory>
 #include <mutex>
@@ -477,6 +480,9 @@ bool CDVDVideoCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
 
 void CDVDVideoCodecFFmpeg::Dispose()
 {
+#if defined(TARGET_DARWIN_TVOS)
+  m_softwareHDR.reset();
+#endif
   av_frame_free(&m_pFrame);
   av_frame_free(&m_pDecodedFrame);
   av_frame_free(&m_pFilterFrame);
@@ -867,6 +873,18 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPi
   // process filters for sw decoding
   else
   {
+#if defined(TARGET_DARWIN_TVOS)
+    if (!m_softwareHDR)
+      m_softwareHDR = std::make_unique<VTB::CSoftwareHDR>();
+    if (m_iOrientation == 0 && m_softwareHDR->CanConvert(m_pDecodedFrame, m_hints))
+    {
+      // GLES would otherwise convert the HDR frame to an 8-bit SDR texture.
+      FilterClose();
+      av_frame_unref(m_pFrame);
+      av_frame_move_ref(m_pFrame, m_pDecodedFrame);
+      return SetPictureParams(pVideoPicture) ? VC_PICTURE : VC_ERROR;
+    }
+#endif
     SetFilters();
 
     bool need_scale = std::ranges::find(m_formats, m_pCodecContext->pix_fmt) == m_formats.end();
@@ -927,6 +945,21 @@ bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
     pVideoPicture->videoBuffer->Release();
   pVideoPicture->videoBuffer = nullptr;
 
+#if defined(TARGET_DARWIN_TVOS)
+  if (m_softwareHDR && m_iOrientation == 0 && m_softwareHDR->CanConvert(m_pFrame, m_hints))
+  {
+    pVideoPicture->videoBuffer = m_softwareHDR->Convert(m_pFrame);
+    if (!pVideoPicture->videoBuffer)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg: failed to upload software HDR frame");
+      return false;
+    }
+    pVideoPicture->pixelFormat = AV_PIX_FMT_VIDEOTOOLBOX;
+    pVideoPicture->colorBits = 10;
+    pVideoPicture->color_range = 0; // The uploaded P010 buffer uses video range.
+    return true;
+  }
+#endif
   CVideoBufferFFmpeg *buffer = dynamic_cast<CVideoBufferFFmpeg*>(m_videoBufferPool->Get());
   buffer->SetRef(m_pFrame);
   pVideoPicture->videoBuffer = buffer;
@@ -1042,9 +1075,15 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
   pVideoPicture->pixelFormat = m_pCodecContext->sw_pix_fmt;
 
   pVideoPicture->chroma_position = m_pCodecContext->chroma_sample_location;
-  pVideoPicture->color_primaries = m_pCodecContext->color_primaries == AVCOL_PRI_UNSPECIFIED ? m_hints.colorPrimaries : m_pCodecContext->color_primaries;
+  pVideoPicture->color_primaries = m_pFrame->color_primaries != AVCOL_PRI_UNSPECIFIED
+                                      ? m_pFrame->color_primaries
+                                      : m_pCodecContext->color_primaries == AVCOL_PRI_UNSPECIFIED
+                                            ? m_hints.colorPrimaries : m_pCodecContext->color_primaries;
   pVideoPicture->m_originalColorPrimaries = pVideoPicture->color_primaries;
-  pVideoPicture->color_transfer = m_pCodecContext->color_trc == AVCOL_TRC_UNSPECIFIED ? m_hints.colorTransferCharacteristic : m_pCodecContext->color_trc;
+  pVideoPicture->color_transfer = m_pFrame->color_trc != AVCOL_TRC_UNSPECIFIED
+                                     ? m_pFrame->color_trc
+                                     : m_pCodecContext->color_trc == AVCOL_TRC_UNSPECIFIED
+                                           ? m_hints.colorTransferCharacteristic : m_pCodecContext->color_trc;
   pVideoPicture->color_space = m_pCodecContext->colorspace == AVCOL_SPC_UNSPECIFIED ? m_hints.colorSpace : m_pCodecContext->colorspace;
   // sw_pix_fmt always describes the actual pixel layout (pix_fmt is opaque
   // for hwaccel paths like AV_PIX_FMT_VAAPI). libavutil api covers every
