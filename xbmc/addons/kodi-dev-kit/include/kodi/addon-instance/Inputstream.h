@@ -1106,6 +1106,16 @@ public:
   /// @brief To get with @ref SetPtsEnd changed values
   double GetPtsEnd() const { return m_cStructure->ptsEnd; }
 
+  void AddCachedRange(int64_t begin, int64_t end) const
+  {
+    if (begin < end && m_cStructure->cachedRangeCount < 32)
+    {
+      auto& range = m_cStructure->cachedRanges[m_cStructure->cachedRangeCount++];
+      range.begin = begin;
+      range.end = end;
+    }
+  }
+
   ///@}
 
 private:

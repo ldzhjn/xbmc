@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 enum DVDStreamType
@@ -77,6 +78,10 @@ public:
     virtual ~ITimes() = default;
     virtual bool GetTimes(Times &times) = 0;
   };
+
+  // Complete media segments held by an inputstream add-on, in milliseconds
+  // from the playback origin. Empty for inputstreams without a segment cache.
+  virtual std::vector<std::pair<int64_t, int64_t>> GetCachedRanges() { return {}; }
 
   class IPosTime
   {

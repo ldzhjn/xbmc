@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <ctime>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -658,6 +659,7 @@ protected:
   } m_dvd;
 
   SPlayerState m_State;
+  std::time_t m_liveDisplayTimeOrigin{0};
   mutable CCriticalSection m_StateSection;
   XbmcThreads::EndTime<> m_syncTimer;
 

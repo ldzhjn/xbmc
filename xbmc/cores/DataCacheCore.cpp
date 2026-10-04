@@ -47,7 +47,11 @@ void CDataCacheCore::Reset()
     std::unique_lock lock(m_contentSection);
     m_contentInfo.Reset();
   }
-  m_timeInfo = {};
+  {
+    std::unique_lock lock(m_stateSection);
+    m_timeInfo = {};
+    m_cachedRanges.clear();
+  }
 }
 
 void CDataCacheCore::ResetAudioCache()
@@ -573,6 +577,18 @@ void CDataCacheCore::GetPlayTimes(time_t &start, int64_t &current, int64_t &min,
   current = m_timeInfo.m_time;
   min = m_timeInfo.m_timeMin;
   max = m_timeInfo.m_timeMax;
+}
+
+void CDataCacheCore::SetCachedRanges(std::vector<std::pair<int64_t, int64_t>> ranges)
+{
+  std::unique_lock lock(m_stateSection);
+  m_cachedRanges = std::move(ranges);
+}
+
+std::vector<std::pair<int64_t, int64_t>> CDataCacheCore::GetCachedRanges()
+{
+  std::unique_lock lock(m_stateSection);
+  return m_cachedRanges;
 }
 
 time_t CDataCacheCore::GetStartTime()

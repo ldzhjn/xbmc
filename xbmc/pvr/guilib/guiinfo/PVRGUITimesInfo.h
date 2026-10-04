@@ -35,6 +35,7 @@ public:
   std::string GetTimeshiftProgressDuration(TIME_FORMAT format) const;
   std::string GetTimeshiftProgressStartTime(TIME_FORMAT format) const;
   std::string GetTimeshiftProgressEndTime(TIME_FORMAT format) const;
+  std::string GetTimeshiftCachedRanges() const;
 
   std::string GetEpgEventDuration(const std::shared_ptr<const CPVREpgInfoTag>& epgTag,
                                   TIME_FORMAT format) const;

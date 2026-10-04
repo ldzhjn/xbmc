@@ -25,6 +25,7 @@
 #include "utils/log.h"
 #include "windowing/Resolution.h"
 
+#include <algorithm>
 #include <memory>
 
 extern "C"
@@ -305,7 +306,8 @@ CDVDInputStream::ITimes* CInputStreamAddon::GetITimes()
 
 bool CInputStreamAddon::GetTimes(Times &times)
 {
-  if (!m_ifc.inputstream->toAddon->get_times)
+  if (!m_ifc.inputstream || !m_ifc.inputstream->toAddon ||
+      !m_ifc.inputstream->toAddon->get_times)
     return false;
 
   INPUTSTREAM_TIMES i_times{};
@@ -319,6 +321,24 @@ bool CInputStreamAddon::GetTimes(Times &times)
     return true;
   }
   return false;
+}
+
+std::vector<std::pair<int64_t, int64_t>> CInputStreamAddon::GetCachedRanges()
+{
+  std::vector<std::pair<int64_t, int64_t>> ranges;
+  if (!m_ifc.inputstream || !m_ifc.inputstream->toAddon ||
+      !m_ifc.inputstream->toAddon->get_times)
+    return ranges;
+  INPUTSTREAM_TIMES times{};
+  if (!m_ifc.inputstream->toAddon->get_times(m_ifc.inputstream, &times))
+    return ranges;
+  for (unsigned int i = 0; i < std::min(times.cachedRangeCount, 32u); ++i)
+  {
+    const auto& range = times.cachedRanges[i];
+    if (range.begin < range.end)
+      ranges.emplace_back(range.begin, range.end);
+  }
+  return ranges;
 }
 
 // IPosTime

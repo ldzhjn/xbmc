@@ -182,6 +182,8 @@ public:
   bool GetVideoRender();
   void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
   void GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max);
+  void SetCachedRanges(std::vector<std::pair<int64_t, int64_t>> ranges);
+  std::vector<std::pair<int64_t, int64_t>> GetCachedRanges();
 
   /*!
    * \brief Get the start time
@@ -391,4 +393,5 @@ protected:
     int64_t m_timeMax;
     int64_t m_timeMin;
   } m_timeInfo = {};
+  std::vector<std::pair<int64_t, int64_t>> m_cachedRanges;
 };
