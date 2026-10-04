@@ -11,6 +11,7 @@
 #include "ServiceBroker.h"
 #include "cores/EdlEdit.h"
 
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <utility>
@@ -47,7 +48,12 @@ void CDataCacheCore::Reset()
     std::unique_lock lock(m_contentSection);
     m_contentInfo.Reset();
   }
-  m_timeInfo = {};
+  {
+    std::unique_lock lock(m_stateSection);
+    m_timeInfo = {};
+    m_cachedRanges.clear();
+    m_hasSegmentCache = false;
+  }
 }
 
 void CDataCacheCore::ResetAudioCache()
@@ -572,6 +578,25 @@ void CDataCacheCore::GetPlayTimes(time_t &start, int64_t &current, int64_t &min,
   max = m_timeInfo.m_timeMax;
 }
 
+void CDataCacheCore::SetCachedRanges(std::vector<std::pair<int64_t, int64_t>> ranges, bool supported)
+{
+  std::unique_lock lock(m_stateSection);
+  m_cachedRanges = std::move(ranges);
+  m_hasSegmentCache = supported;
+}
+
+bool CDataCacheCore::HasSegmentCache()
+{
+  std::unique_lock lock(m_stateSection);
+  return m_hasSegmentCache;
+}
+
+std::vector<std::pair<int64_t, int64_t>> CDataCacheCore::GetCachedRanges()
+{
+  std::unique_lock lock(m_stateSection);
+  return m_cachedRanges;
+}
+
 time_t CDataCacheCore::GetStartTime()
 {
   std::unique_lock lock(m_stateSection);
@@ -608,5 +633,6 @@ float CDataCacheCore::GetPlayPercentage()
   if (iTotalTime <= 0)
     return 0;
 
-  return m_timeInfo.m_time * 100 / static_cast<float>(iTotalTime);
+  const double position = static_cast<double>(m_timeInfo.m_time) - m_timeInfo.m_timeMin;
+  return static_cast<float>(std::clamp(position * 100.0 / iTotalTime, 0.0, 100.0));
 }

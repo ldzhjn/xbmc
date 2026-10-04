@@ -1106,6 +1106,24 @@ public:
   /// @brief To get with @ref SetPtsEnd changed values
   double GetPtsEnd() const { return m_cStructure->ptsEnd; }
 
+  /// @brief Report an enabled segment cache even when its resident range list is empty.
+  void SetCachedRangesSupported(bool supported) const
+  {
+    m_cStructure->cachedRangesSupported = supported;
+  }
+
+  /// @brief Add a complete locally cached range in milliseconds from playback origin.
+  /// Available since inputstream API 3.5.0. Invalid ranges and entries beyond 32 are ignored.
+  void AddCachedRange(int64_t begin, int64_t end) const
+  {
+    if (begin < end && m_cStructure->cachedRangeCount < 32)
+    {
+      auto& range = m_cStructure->cachedRanges[m_cStructure->cachedRangeCount++];
+      range.begin = begin;
+      range.end = end;
+    }
+  }
+
   ///@}
 
 private:

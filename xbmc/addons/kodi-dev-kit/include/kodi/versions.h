@@ -108,7 +108,7 @@
 #define ADDON_INSTANCE_VERSION_IMAGEDECODER_DEPENDS   "c-api/addon-instance/imagedecoder.h" \
                                                       "addon-instance/ImageDecoder.h"
 
-#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.4.0"
+#define ADDON_INSTANCE_VERSION_INPUTSTREAM            "3.5.0"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN        "3.4.0"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_XML_ID     "kodi.binary.instance.inputstream"
 #define ADDON_INSTANCE_VERSION_INPUTSTREAM_DEPENDS    "c-api/addon-instance/inputstream.h" \
@@ -402,7 +402,14 @@ extern "C"
       case ADDON_INSTANCE_IMAGEDECODER:
         return ADDON_INSTANCE_VERSION_IMAGEDECODER_MIN;
       case ADDON_INSTANCE_INPUTSTREAM:
+#ifdef BUILD_KODI_ADDON
+        // InputstreamTimes copies the complete API structure. An add-on built
+        // with 3.5 requires a host that provides its appended cache fields.
+        return ADDON_INSTANCE_VERSION_INPUTSTREAM;
+#else
+        // A 3.5 host still accepts add-ons built against the 3.4 timing prefix.
         return ADDON_INSTANCE_VERSION_INPUTSTREAM_MIN;
+#endif
       case ADDON_INSTANCE_PERIPHERAL:
         return ADDON_INSTANCE_VERSION_PERIPHERAL_MIN;
       case ADDON_INSTANCE_PVR:

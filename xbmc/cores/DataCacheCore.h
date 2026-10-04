@@ -14,6 +14,7 @@
 #include <atomic>
 #include <chrono>
 #include <string>
+#include <utility>
 #include <vector>
 
 class CDataCacheCore
@@ -182,6 +183,9 @@ public:
   bool GetVideoRender();
   void SetPlayTimes(time_t start, int64_t current, int64_t min, int64_t max);
   void GetPlayTimes(time_t &start, int64_t &current, int64_t &min, int64_t &max);
+  void SetCachedRanges(std::vector<std::pair<int64_t, int64_t>> ranges, bool supported);
+  bool HasSegmentCache();
+  std::vector<std::pair<int64_t, int64_t>> GetCachedRanges();
 
   /*!
    * \brief Get the start time
@@ -391,4 +395,6 @@ protected:
     int64_t m_timeMax;
     int64_t m_timeMin;
   } m_timeInfo = {};
+  std::vector<std::pair<int64_t, int64_t>> m_cachedRanges;
+  bool m_hasSegmentCache{false};
 };
