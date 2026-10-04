@@ -127,6 +127,139 @@ void CVideoBufferPoolVTB::Return(int id)
   m_free.push_back(id);
 }
 
+#if defined(TARGET_DARWIN_TVOS)
+CSoftwareHDR::CSoftwareHDR()
+{
+  auto* winSystem = dynamic_cast<CWinSystemTVOS*>(CServiceBroker::GetWinSystem());
+  m_enabled = winSystem && winSystem->CanUseHDRVideoLayer() && winSystem->IsHDRDisplay();
+  m_videoBufferPool = std::make_shared<CVideoBufferPoolVTB>();
+}
+
+CSoftwareHDR::~CSoftwareHDR()
+{
+  sws_freeContext(m_swsContext);
+  if (m_pixelBufferPool)
+    CVPixelBufferPoolRelease(m_pixelBufferPool);
+}
+
+bool CSoftwareHDR::CanConvert(const AVFrame* frame, const CDVDStreamInfo& hints) const
+{
+  if (!m_enabled || !frame || !frame->data[0] || (frame->flags & AV_FRAME_FLAG_INTERLACED))
+    return false;
+
+  if (frame->format != AV_PIX_FMT_YUV420P10LE && frame->format != AV_PIX_FMT_P010LE)
+    return false;
+
+  const auto primaries = frame->color_primaries == AVCOL_PRI_UNSPECIFIED
+                             ? hints.colorPrimaries : frame->color_primaries;
+  const auto transfer = frame->color_trc == AVCOL_TRC_UNSPECIFIED
+                            ? hints.colorTransferCharacteristic : frame->color_trc;
+  return primaries == AVCOL_PRI_BT2020 &&
+         (transfer == AVCOL_TRC_SMPTE2084 || transfer == AVCOL_TRC_ARIB_STD_B67) &&
+         hints.dovi.dv_profile == 0;
+}
+
+CVideoBuffer* CSoftwareHDR::Convert(const AVFrame* frame)
+{
+  if (!m_pixelBufferPool || frame->width != m_width || frame->height != m_height)
+  {
+    if (m_pixelBufferPool)
+    {
+      CVPixelBufferPoolRelease(m_pixelBufferPool);
+      m_pixelBufferPool = nullptr;
+    }
+    const int pixelFormat = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange;
+    CFNumberRef width = CFNumberCreate(nullptr, kCFNumberIntType, &frame->width);
+    CFNumberRef height = CFNumberCreate(nullptr, kCFNumberIntType, &frame->height);
+    CFNumberRef format = CFNumberCreate(nullptr, kCFNumberIntType, &pixelFormat);
+    CFDictionaryRef surface = CFDictionaryCreate(nullptr, nullptr, nullptr, 0,
+                                                 &kCFTypeDictionaryKeyCallBacks,
+                                                 &kCFTypeDictionaryValueCallBacks);
+    const void* keys[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey,
+                          kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferIOSurfacePropertiesKey};
+    const void* values[] = {width, height, format, surface};
+    CFDictionaryRef attributes = CFDictionaryCreate(nullptr, keys, values, 4,
+                                                    &kCFTypeDictionaryKeyCallBacks,
+                                                    &kCFTypeDictionaryValueCallBacks);
+    const CVReturn status = CVPixelBufferPoolCreate(nullptr, nullptr, attributes, &m_pixelBufferPool);
+    CFRelease(attributes);
+    CFRelease(surface);
+    CFRelease(format);
+    CFRelease(height);
+    CFRelease(width);
+    if (status != kCVReturnSuccess)
+      return nullptr;
+    m_width = frame->width;
+    m_height = frame->height;
+  }
+
+  m_swsContext = sws_getCachedContext(m_swsContext, frame->width, frame->height,
+                                    static_cast<AVPixelFormat>(frame->format),
+                                    frame->width, frame->height, AV_PIX_FMT_P010LE,
+                                    SWS_POINT, nullptr, nullptr, nullptr);
+  if (!m_swsContext)
+    return nullptr;
+  const int* coefficients = sws_getCoefficients(SWS_CS_BT2020);
+  if (sws_setColorspaceDetails(m_swsContext, coefficients,
+                              frame->color_range == AVCOL_RANGE_JPEG,
+                              coefficients, 0, 0, 1 << 16, 1 << 16) < 0)
+    return nullptr;
+
+  CVPixelBufferRef pixelBuffer = nullptr;
+  if (CVPixelBufferPoolCreatePixelBuffer(nullptr, m_pixelBufferPool, &pixelBuffer) != kCVReturnSuccess)
+    return nullptr;
+  if (CVPixelBufferLockBaseAddress(pixelBuffer, 0) != kCVReturnSuccess)
+  {
+    CVPixelBufferRelease(pixelBuffer);
+    return nullptr;
+  }
+  uint8_t* planes[4] = {
+      static_cast<uint8_t*>(CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)),
+      static_cast<uint8_t*>(CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1)), nullptr, nullptr};
+  int strides[4] = {static_cast<int>(CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)),
+                    static_cast<int>(CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)), 0, 0};
+  const int rows = sws_scale(m_swsContext, frame->data, frame->linesize, 0, frame->height,
+                           planes, strides);
+  CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+  if (rows != frame->height)
+  {
+    CVPixelBufferRelease(pixelBuffer);
+    return nullptr;
+  }
+
+  AVFrame* output = av_frame_alloc();
+  if (!output)
+  {
+    CVPixelBufferRelease(pixelBuffer);
+    return nullptr;
+  }
+  output->buf[0] = av_buffer_create(
+      reinterpret_cast<uint8_t*>(pixelBuffer), 1,
+      [](void* opaque, uint8_t*) { CVPixelBufferRelease(static_cast<CVPixelBufferRef>(opaque)); },
+      pixelBuffer, 0);
+  if (!output->buf[0])
+  {
+    CVPixelBufferRelease(pixelBuffer);
+    av_frame_free(&output);
+    return nullptr;
+  }
+  output->data[3] = reinterpret_cast<uint8_t*>(pixelBuffer);
+  output->format = AV_PIX_FMT_VIDEOTOOLBOX;
+  output->width = frame->width;
+  output->height = frame->height;
+  auto* buffer = static_cast<CVideoBufferVTB*>(m_videoBufferPool->Get());
+  buffer->SetRef(output);
+  av_frame_free(&output);
+  if (!m_loggedFirstPicture)
+  {
+    CLog::Log(LOGINFO, "VTB::SoftwareHDR: uploading {}x{} 10-bit frames to HDR video layer",
+              frame->width, frame->height);
+    m_loggedFirstPicture = true;
+  }
+  return buffer;
+}
+#endif
+
 //------------------------------------------------------------------------------
 // main class
 //------------------------------------------------------------------------------

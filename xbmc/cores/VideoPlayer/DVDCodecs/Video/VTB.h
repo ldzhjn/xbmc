@@ -19,6 +19,9 @@
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 
 #include <CoreVideo/CVPixelBuffer.h>
+#if defined(TARGET_DARWIN_TVOS)
+#include <CoreVideo/CVPixelBufferPool.h>
+#endif
 
 class CProcessInfo;
 
@@ -41,6 +44,27 @@ protected:
   CVPixelBufferRef m_pbRef = nullptr;
   AVFrame *m_pFrame;
 };
+
+#if defined(TARGET_DARWIN_TVOS)
+// Upload software decoded HDR frames to the same 10-bit video layer as VTB frames.
+class CSoftwareHDR
+{
+public:
+  CSoftwareHDR();
+  ~CSoftwareHDR();
+  bool CanConvert(const AVFrame* frame, const CDVDStreamInfo& hints) const;
+  CVideoBuffer* Convert(const AVFrame* frame);
+
+private:
+  bool m_enabled = false;
+  bool m_loggedFirstPicture = false;
+  int m_width = 0;
+  int m_height = 0;
+  CVPixelBufferPoolRef m_pixelBufferPool = nullptr;
+  SwsContext* m_swsContext = nullptr;
+  std::shared_ptr<CVideoBufferPoolVTB> m_videoBufferPool;
+};
+#endif
 
 class CDecoder: public IHardwareDecoder
 {
