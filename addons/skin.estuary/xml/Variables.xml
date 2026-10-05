@@ -806,10 +806,11 @@
 		<value condition="String.IsEqual(ListItem.VideoResolution,576) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,576)]">SD</value>
 		<value condition="String.IsEqual(ListItem.VideoResolution,720) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,720)]">HD</value>
 		<value condition="String.IsEqual(ListItem.VideoResolution,1080) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,1080)]">HD</value>
+		<value condition="String.IsEqual(ListItem.VideoResolution,2K) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,2K)]">HD</value>
+		<value condition="String.IsEqual(ListItem.VideoResolution,1440) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,1440)]">QHD</value>
 		<value condition="String.IsEqual(ListItem.VideoResolution,4K) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,4K)]">UHD</value>
 		<value condition="String.IsEqual(ListItem.VideoResolution,8K) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.VideoResolution,8K)]">UHD</value>
-		<value condition="Window.IsActive(fullscreenvideo)">$INFO[VideoPlayer.VideoResolution]</value>
-		<value>$INFO[ListItem.VideoResolution]</value>
+		<value></value>
 	</variable>
 	<variable name="VideoHDRTypeVar">
 		<value condition="String.IsEqual(ListItem.HdrType,dolbyvision) | [Window.IsActive(fullscreenvideo) + String.IsEqual(VideoPlayer.HdrType,dolbyvision)]">Dolby Vision</value>

@@ -1783,7 +1783,9 @@ public:
   /// @defgroup cpp_kodi_addon_inputstream_Times 4. Times (optional)
   /// @brief **Another way to get stream position time.**
   ///
-  /// @note These are used and must be set by the addon if the @ref INPUTSTREAM_SUPPORTS_ITIME is set in the capabilities (see @ref GetCapabilities()).
+  /// @note Timing fields must be set when @ref INPUTSTREAM_SUPPORTS_ITIME is advertised.
+  /// Since API 3.5.0 Kodi also calls GetTimes for optional segment cache ranges
+  /// without that capability; providers may fill only the cache fields then.
   ///
   /// @ingroup cpp_kodi_addon_inputstream
   ///@{
