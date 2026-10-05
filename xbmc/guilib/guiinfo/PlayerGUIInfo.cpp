@@ -34,6 +34,7 @@
 #include "utils/log.h"
 #include "windowing/WinSystem.h"
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -188,6 +189,9 @@ bool CPlayerGUIInfo::GetLabel(std::string& value,
       return true;
     case PLAYER_PROGRESS_CACHE:
       value = std::to_string(std::lrintf(g_application.GetCachePercentage()));
+      return true;
+    case PLAYER_CACHED_RANGES:
+      value = GetCachedRanges();
       return true;
     case PLAYER_VOLUME:
       value =
@@ -604,6 +608,9 @@ bool CPlayerGUIInfo::GetBool(bool& value,
     case PLAYER_HAS_BOOKMARKS:
       value = !CServiceBroker::GetDataCacheCore().GetBookmarks().empty();
       return true;
+    case PLAYER_HAS_SEGMENT_CACHE:
+      value = CServiceBroker::GetDataCacheCore().HasSegmentCache();
+      return true;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // PLAYLIST_*
@@ -690,6 +697,53 @@ bool CPlayerGUIInfo::GetBool(bool& value,
   }
 
   return false;
+}
+
+std::string CPlayerGUIInfo::GetCachedRanges() const
+{
+  CDataCacheCore& data = CServiceBroker::GetDataCacheCore();
+  auto ranges = data.GetCachedRanges();
+  if (ranges.empty())
+    return {};
+
+  std::time_t start;
+  int64_t current;
+  int64_t min;
+  int64_t max;
+  data.GetPlayTimes(start, current, min, max);
+  if (max <= min)
+    return {};
+
+  // The input stream reports positions relative to the playback origin, in milliseconds.
+  // Clip to the current seek window before merging, so expired live ranges disappear.
+  for (auto& [begin, end] : ranges)
+  {
+    begin = std::clamp(begin, min, max);
+    end = std::clamp(end, min, max);
+  }
+  std::erase_if(ranges, [](const auto& range) { return range.second <= range.first; });
+  std::sort(ranges.begin(), ranges.end());
+
+  std::vector<std::pair<int64_t, int64_t>> merged;
+  for (const auto& range : ranges)
+  {
+    if (!merged.empty() && range.first <= merged.back().second)
+      merged.back().second = std::max(merged.back().second, range.second);
+    else
+      merged.push_back(range);
+  }
+
+  std::string values;
+  const double duration = static_cast<double>(max) - static_cast<double>(min);
+  for (const auto& [begin, end] : merged)
+  {
+    if (!values.empty())
+      values.push_back(',');
+    values += StringUtils::Format("{:.5f},{:.5f}",
+                                  (static_cast<double>(begin) - min) * 100.0 / duration,
+                                  (static_cast<double>(end) - min) * 100.0 / duration);
+  }
+  return values;
 }
 
 std::string CPlayerGUIInfo::GetContentRanges(int iInfo) const

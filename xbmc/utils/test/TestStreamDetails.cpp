@@ -70,6 +70,26 @@ TEST(TestStreamDetails, VideoDimsToResolutionDescription)
                CStreamDetails::VideoDimsToResolutionDescription(1920, 1080).c_str());
 }
 
+TEST(TestStreamDetails, VideoDimsToResolutionDescriptionBetweenHDAndUHD)
+{
+  EXPECT_STREQ("2K", CStreamDetails::VideoDimsToResolutionDescription(2048, 1080).c_str());
+  EXPECT_STREQ("2K", CStreamDetails::VideoDimsToResolutionDescription(2048, 1536).c_str());
+  EXPECT_STREQ("1440", CStreamDetails::VideoDimsToResolutionDescription(2560, 1440).c_str());
+  EXPECT_STREQ("1440", CStreamDetails::VideoDimsToResolutionDescription(2560, 1600).c_str());
+  EXPECT_STREQ("1440", CStreamDetails::VideoDimsToResolutionDescription(2880, 1440).c_str());
+  EXPECT_STREQ("1800", CStreamDetails::VideoDimsToResolutionDescription(3200, 1800).c_str());
+  EXPECT_STREQ("1080", CStreamDetails::VideoDimsToResolutionDescription(1080, 1920).c_str());
+  EXPECT_STREQ("1440", CStreamDetails::VideoDimsToResolutionDescription(1440, 2560).c_str());
+  EXPECT_STREQ("4K", CStreamDetails::VideoDimsToResolutionDescription(3840, 2160).c_str());
+  EXPECT_STREQ("4K", CStreamDetails::VideoDimsToResolutionDescription(3840, 1600).c_str());
+  EXPECT_STREQ("4K", CStreamDetails::VideoDimsToResolutionDescription(4096, 2160).c_str());
+  EXPECT_STREQ("4K", CStreamDetails::VideoDimsToResolutionDescription(2880, 2160).c_str());
+  EXPECT_STREQ("4K", CStreamDetails::VideoDimsToResolutionDescription(2160, 3840).c_str());
+  EXPECT_STREQ("8K", CStreamDetails::VideoDimsToResolutionDescription(7680, 4320).c_str());
+  EXPECT_STREQ("", CStreamDetails::VideoDimsToResolutionDescription(-1, 1440).c_str());
+  EXPECT_STREQ("", CStreamDetails::VideoDimsToResolutionDescription(2560, 0).c_str());
+}
+
 TEST(TestStreamDetails, VideoAspectToAspectDescription)
 {
   EXPECT_STREQ("2.40", CStreamDetails::VideoAspectToAspectDescription(2.39f).c_str());

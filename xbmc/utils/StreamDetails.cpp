@@ -14,6 +14,7 @@
 #include "utils/LangCodeExpander.h"
 #include "utils/Variant.h"
 
+#include <algorithm>
 #include <math.h>
 
 const float VIDEOASPECT_EPSILON = 0.025f;
@@ -618,11 +619,15 @@ void CStreamDetails::DetermineBestStreams(void)
 
 std::string CStreamDetails::VideoDimsToResolutionDescription(int iWidth, int iHeight)
 {
-  if (iWidth == 0 || iHeight == 0)
+  if (iWidth <= 0 || iHeight <= 0)
     return "";
 
+  // Classify portrait video like its landscape equivalent.
+  if (iWidth < iHeight)
+    std::swap(iWidth, iHeight);
+
   // Anamorphic NTSC DVD
-  else if (iWidth <= 854 && iHeight <= 480)
+  if (iWidth <= 854 && iHeight <= 480)
     return "480";
   // 960x540 (sometimes 544 which is multiple of 16)
   else if (iWidth <= 960 && iHeight <= 544)
@@ -636,6 +641,15 @@ std::string CStreamDetails::VideoDimsToResolutionDescription(int iWidth, int iHe
   // 1920x1080
   else if (iWidth <= 1920 && iHeight <= 1440)
     return "1080";
+  // 2048x1080 (DCI 2K) and 2048x1536 (4:3)
+  else if (iWidth <= 2048 && iHeight <= 1536)
+    return "2K";
+  // 2560x1440 (QHD), including 4:3 and 16:10 variants
+  else if (iWidth <= 2560 && iHeight <= 1920)
+    return "1440";
+  // Intermediate sizes do not imply UHD. Report their actual height.
+  else if (iWidth < 3840 && iHeight < 2160)
+    return std::to_string(iHeight);
   // 4K
   else if (iWidth <= 4096 && iHeight <= 3072)
     return "4K";

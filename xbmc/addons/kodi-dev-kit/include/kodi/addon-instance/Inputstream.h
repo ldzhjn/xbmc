@@ -1106,6 +1106,24 @@ public:
   /// @brief To get with @ref SetPtsEnd changed values
   double GetPtsEnd() const { return m_cStructure->ptsEnd; }
 
+  /// @brief Report an enabled segment cache even when its resident range list is empty.
+  void SetCachedRangesSupported(bool supported) const
+  {
+    m_cStructure->cachedRangesSupported = supported;
+  }
+
+  /// @brief Add a complete locally cached range in milliseconds from playback origin.
+  /// Available since inputstream API 3.5.0. Invalid ranges and entries beyond 32 are ignored.
+  void AddCachedRange(int64_t begin, int64_t end) const
+  {
+    if (begin < end && m_cStructure->cachedRangeCount < 32)
+    {
+      auto& range = m_cStructure->cachedRanges[m_cStructure->cachedRangeCount++];
+      range.begin = begin;
+      range.end = end;
+    }
+  }
+
   ///@}
 
 private:
@@ -1765,7 +1783,9 @@ public:
   /// @defgroup cpp_kodi_addon_inputstream_Times 4. Times (optional)
   /// @brief **Another way to get stream position time.**
   ///
-  /// @note These are used and must be set by the addon if the @ref INPUTSTREAM_SUPPORTS_ITIME is set in the capabilities (see @ref GetCapabilities()).
+  /// @note Timing fields must be set when @ref INPUTSTREAM_SUPPORTS_ITIME is advertised.
+  /// Since API 3.5.0 Kodi also calls GetTimes for optional segment cache ranges
+  /// without that capability; providers may fill only the cache fields then.
   ///
   /// @ingroup cpp_kodi_addon_inputstream
   ///@{

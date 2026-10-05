@@ -65,6 +65,7 @@
 #include "windowing/WinSystem.h"
 
 #include <algorithm>
+#include <ctime>
 #include <cassert>
 #include <chrono>
 #include <iterator>
@@ -898,6 +899,7 @@ bool CVideoPlayer::OpenInputStream()
   CLog::Log(LOGINFO, "Creating InputStream");
 
   m_pInputStream = CDVDFactoryInputStream::CreateInputStream(this, m_item, true);
+  m_liveDisplayTimeOrigin = 0;
   if (m_pInputStream == nullptr)
   {
     CLog::Log(LOGERROR, "CVideoPlayer::OpenInputStream - unable to create input stream for [{}]",
@@ -3728,22 +3730,19 @@ void CVideoPlayer::GetGeneralInfo(std::string& strGeneralInfo)
 
 void CVideoPlayer::SeekPercentage(float iPercent)
 {
-  int64_t iTotalTime = m_processInfo->GetMaxTime();
-
-  if (!iTotalTime)
+  time_t start;
+  int64_t current, minimum, maximum;
+  CServiceBroker::GetDataCacheCore().GetPlayTimes(start, current, minimum, maximum);
+  if (maximum <= minimum)
     return;
 
-  SeekTime((int64_t)(iTotalTime * iPercent / 100));
+  const double fraction = std::clamp(static_cast<double>(iPercent), 0.0, 100.0) / 100.0;
+  SeekTime(static_cast<int64_t>(minimum + (static_cast<double>(maximum) - minimum) * fraction));
 }
 
 float CVideoPlayer::GetPercentage()
 {
-  int64_t iTotalTime = m_processInfo->GetMaxTime();
-
-  if (!iTotalTime)
-    return 0.0f;
-
-  return GetTime() * 100 / (float)iTotalTime;
+  return CServiceBroker::GetDataCacheCore().GetPlayPercentage();
 }
 
 float CVideoPlayer::GetCachePercentage() const
@@ -5452,6 +5451,16 @@ void CVideoPlayer::UpdatePlayState(double timeout)
       }
       state.time += state.time_offset * 1000 / DVD_TIME_BASE;
       state.timeMax = pDisplayTime->GetTotalTime();
+      // Live inputstreams that expose only display time still have a real
+      // timeshift window. Give PVR's progress bar a stable wall-clock origin
+      // so its cursor follows the current position instead of staying at 0.
+      if (m_pInputStream->IsRealtime())
+      {
+        if (!m_liveDisplayTimeOrigin)
+          m_liveDisplayTimeOrigin =
+              std::time(nullptr) - static_cast<std::time_t>(std::max(0.0, state.time) / 1000);
+        state.startTime = m_liveDisplayTimeOrigin;
+      }
     }
     else
     {
@@ -5571,6 +5580,10 @@ void CVideoPlayer::UpdatePlayState(double timeout)
   }
 
   m_processInfo->SetPlayTimes(state.startTime, state.time, state.timeMin, state.timeMax);
+  bool segmentCacheSupported{false};
+  auto cachedRanges = m_pInputStream ? m_pInputStream->GetCachedRanges(segmentCacheSupported)
+                                    : std::vector<std::pair<int64_t, int64_t>>{};
+  CServiceBroker::GetDataCacheCore().SetCachedRanges(std::move(cachedRanges), segmentCacheSupported);
 
   std::unique_lock lock(m_StateSection);
   m_State = state;

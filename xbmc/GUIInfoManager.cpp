@@ -579,6 +579,24 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///     infolabel also exposed as a string.
 ///     <p>
 ///   }
+///   \table_row3{   <b>`Player.CachedRanges`</b>,
+///                  \anchor Player_CachedRanges
+///                  _string_,
+///     @return Comma-separated pairs of cached range start and end percentages
+///     within the current seek window. Empty when the input stream does not
+///     report cached ranges.
+///     @note Intended for the ranges control. Gaps remain visible after seeking.
+///     <p>
+///   }
+///   \table_row3{   <b>`Player.HasSegmentCache`</b>,
+///                  \anchor Player_HasSegmentCache
+///                  _boolean_,
+///     @return **True** when the input stream provides segment cache ranges.
+///     This remains true when its current range list is empty.
+///     @note Use this to suppress a legacy cache progress bar when the segment
+///     cache is active but empty.
+///     <p>
+///   }
 ///   \table_row3{   <b>`Player.Volume`</b>,
 ///                  \anchor Player_Volume
 ///                  _string_,
@@ -860,7 +878,7 @@ constexpr std::array<InfoMap, 7> integer_bools = {{
 ///     <p>
 ///   }
 // clang-format off
-constexpr std::array<InfoMap, 60> player_labels = {{
+constexpr std::array<InfoMap, 62> player_labels = {{
     {"hasmedia",              PLAYER_HAS_MEDIA},
     {"hasaudio",              PLAYER_HAS_AUDIO},
     {"hasvideo",              PLAYER_HAS_VIDEO},
@@ -894,6 +912,8 @@ constexpr std::array<InfoMap, 60> player_labels = {{
     {"title",                 PLAYER_TITLE},
     {"progress",              PLAYER_PROGRESS},
     {"progresscache",         PLAYER_PROGRESS_CACHE},
+    {"cachedranges",          PLAYER_CACHED_RANGES},
+    {"hassegmentcache",       PLAYER_HAS_SEGMENT_CACHE},
     {"volume",                PLAYER_VOLUME},
     {"subtitledelay",         PLAYER_SUBTITLE_DELAY},
     {"audiodelay",            PLAYER_AUDIO_DELAY},

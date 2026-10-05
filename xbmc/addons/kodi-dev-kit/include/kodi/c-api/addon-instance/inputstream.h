@@ -19,7 +19,7 @@
 #include <time.h>
 
 // Increment this level always if you add features which can lead to compile failures in the addon
-#define INPUTSTREAM_VERSION_LEVEL 4
+#define INPUTSTREAM_VERSION_LEVEL 5
 
 #define INPUTSTREAM_MAX_INFO_COUNT 8
 #define INPUTSTREAM_MAX_STREAM_COUNT 1024
@@ -635,6 +635,17 @@ extern "C"
     double ptsStart;
     double ptsBegin;
     double ptsEnd;
+    // New in API 3.5.0 / INPUTSTREAM_VERSION_LEVEL 5. Complete locally cached
+    // media ranges in milliseconds from the stream's playback origin.
+    // Appended so older add-ons can still populate the timing fields above.
+    unsigned int cachedRangeCount;
+    struct
+    {
+      int64_t begin;
+      int64_t end;
+    } cachedRanges[32];
+    // True when the segment cache is enabled, including when no ranges are resident.
+    bool cachedRangesSupported;
   };
 
   /*!

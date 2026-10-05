@@ -24,6 +24,7 @@
 
 extern "C" {
 #include <libavcodec/videotoolbox.h>
+#include <libavutil/pixdesc.h>
 }
 
 using namespace VTB;
@@ -343,6 +344,27 @@ bool CDecoder::Open(AVCodecContext *avctx, AVCodecContext* mainctx, enum AVPixel
 {
   if (!CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEVTB))
     return false;
+
+#if defined(TARGET_DARWIN_TVOS) && defined(__TVOS_26_2)
+  if (avctx->codec_id == AV_CODEC_ID_VP9)
+  {
+    // The GLES renderer only supports 8-bit NV12 surfaces.
+    const AVPixFmtDescriptor* descriptor = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
+    if (!descriptor || descriptor->comp[0].depth != 8)
+      return false;
+
+    if (__builtin_available(tvOS 26.2, *))
+    {
+      VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
+      const bool supported = VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9);
+      CLog::Log(LOGDEBUG, "VTB: VP9 hardware decode support after registration: {}", supported);
+      if (!supported)
+        return false;
+    }
+    else
+      return false;
+  }
+#endif
 
   CLog::Log(LOGDEBUG, "VTB::Open: transfer {}, primaries {}, bits {}, pixel format {}",
             static_cast<int>(avctx->color_trc), static_cast<int>(avctx->color_primaries),
